@@ -669,9 +669,6 @@ static int f2fs_show_options(struct seq_file *seq, struct dentry *root)
 #endif
 	if (test_opt(sbi, DISABLE_EXT_IDENTIFY))
 		seq_puts(seq, ",disable_ext_identify");
-<<<<<<< HEAD
-
-=======
 	if (test_opt(sbi, INLINE_DATA))
 		seq_puts(seq, ",inline_data");
 	else
@@ -689,7 +686,6 @@ static int f2fs_show_options(struct seq_file *seq, struct dentry *root)
 	else
 		seq_puts(seq, ",noextent_cache");
 	seq_printf(seq, ",active_logs=%u", sbi->active_logs);
->>>>>>> bfc9891... f2fs: catch up to v4.4-rc1
 
 	return 0;
 }
@@ -1524,3 +1520,4 @@ module_exit(exit_f2fs_fs)
 MODULE_AUTHOR("Samsung Electronics's Praesto Team");
 MODULE_DESCRIPTION("Flash Friendly File System");
 MODULE_LICENSE("GPL");
+
