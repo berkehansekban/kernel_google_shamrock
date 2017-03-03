@@ -1314,7 +1314,7 @@ static int msm_ispif_init(struct ispif_device *ispif,
 
 	if (ispif->csid_version >= CSID_VERSION_V30) {
 		if (!ispif->clk_mux_mem || !ispif->clk_mux_io) {
-			pr_err("%s csi clk mux mem %p io %p\n", __func__,
+			pr_err("%s csi clk mux mem %pK io %pK\n", __func__,
 				ispif->clk_mux_mem, ispif->clk_mux_io);
 			rc = -ENOMEM;
 			return rc;
@@ -1468,11 +1468,6 @@ static long msm_ispif_subdev_ioctl(struct v4l2_subdev *sd,
 		return 0;
 	}
 	case MSM_SD_SHUTDOWN: {
-		if (ispif && ispif->base) {
-			mutex_lock(&ispif->mutex);
-			msm_ispif_release(ispif);
-			mutex_unlock(&ispif->mutex);
-		}
 		return 0;
 	}
 	default:
