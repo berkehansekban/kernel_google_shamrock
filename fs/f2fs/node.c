@@ -342,9 +342,6 @@ static void set_node_addr(struct f2fs_sb_info *sbi, struct node_info *ni,
 		set_nat_flag(e, IS_CHECKPOINTED, false);
 	__set_nat_cache_dirty(nm_i, e);
 
-	if (enabled_nat_bits(sbi, NULL) && new_blkaddr == NEW_ADDR)
-		__clear_bit_le(NAT_BLOCK_OFFSET(ni->nid), nm_i->empty_nat_bits);
-
 	/* update fsync_mark if its inode nat entry is still alive */
 	if (ni->nid != ni->ino)
 		e = __lookup_nat_cache(nm_i, ni->ino);
@@ -1852,18 +1849,10 @@ static void update_free_nid_bitmap(struct f2fs_sb_info *sbi, nid_t nid,
 	else
 		__clear_bit_le(nid_ofs, nm_i->free_nid_bitmap[nat_ofs]);
 
-<<<<<<< HEAD
-	spin_lock(&nm_i->free_nid_lock);
-=======
->>>>>>> b6375e5... f2fs: cover update_free_nid_bitmap with nid_list_lock
 	if (set)
 		nm_i->free_nid_count[nat_ofs]++;
 	else if (!build)
 		nm_i->free_nid_count[nat_ofs]--;
-<<<<<<< HEAD
-	spin_unlock(&nm_i->free_nid_lock);
-=======
->>>>>>> b6375e5... f2fs: cover update_free_nid_bitmap with nid_list_lock
 }
 
 static void scan_nat_page(struct f2fs_sb_info *sbi,
@@ -1892,13 +1881,9 @@ static void scan_nat_page(struct f2fs_sb_info *sbi,
 		f2fs_bug_on(sbi, blk_addr == NEW_ADDR);
 		if (blk_addr == NULL_ADDR)
 			freed = add_free_nid(sbi, start_nid, true);
-<<<<<<< HEAD
-		update_free_nid_bitmap(sbi, start_nid, freed, true);
-=======
 		spin_lock(&NM_I(sbi)->nid_list_lock);
 		update_free_nid_bitmap(sbi, start_nid, freed, true);
 		spin_unlock(&NM_I(sbi)->nid_list_lock);
->>>>>>> b6375e5... f2fs: cover update_free_nid_bitmap with nid_list_lock
 	}
 }
 
@@ -1946,58 +1931,6 @@ out:
 	up_read(&nm_i->nat_tree_lock);
 }
 
-static int scan_nat_bits(struct f2fs_sb_info *sbi)
-{
-	struct f2fs_nm_info *nm_i = NM_I(sbi);
-	struct page *page;
-	unsigned int i = 0;
-	nid_t nid;
-
-	if (!enabled_nat_bits(sbi, NULL))
-		return -EAGAIN;
-
-	down_read(&nm_i->nat_tree_lock);
-check_empty:
-	i = find_next_bit_le(nm_i->empty_nat_bits, nm_i->nat_blocks, i);
-	if (i >= nm_i->nat_blocks) {
-		i = 0;
-		goto check_partial;
-	}
-
-	for (nid = i * NAT_ENTRY_PER_BLOCK; nid < (i + 1) * NAT_ENTRY_PER_BLOCK;
-									nid++) {
-		if (unlikely(nid >= nm_i->max_nid))
-			break;
-		add_free_nid(sbi, nid, true);
-	}
-
-	if (nm_i->nid_cnt[FREE_NID_LIST] >= MAX_FREE_NIDS)
-		goto out;
-	i++;
-	goto check_empty;
-
-check_partial:
-	i = find_next_zero_bit_le(nm_i->full_nat_bits, nm_i->nat_blocks, i);
-	if (i >= nm_i->nat_blocks) {
-		disable_nat_bits(sbi, true);
-		up_read(&nm_i->nat_tree_lock);
-		return -EINVAL;
-	}
-
-	nid = i * NAT_ENTRY_PER_BLOCK;
-	page = get_current_nat_page(sbi, nid);
-	scan_nat_page(sbi, page, nid);
-	f2fs_put_page(page, 1);
-
-	if (nm_i->nid_cnt[FREE_NID_LIST] < MAX_FREE_NIDS) {
-		i++;
-		goto check_partial;
-	}
-out:
-	up_read(&nm_i->nat_tree_lock);
-	return 0;
-}
-
 static void __build_free_nids(struct f2fs_sb_info *sbi, bool sync, bool mount)
 {
 	struct f2fs_nm_info *nm_i = NM_I(sbi);
@@ -2019,21 +1952,6 @@ static void __build_free_nids(struct f2fs_sb_info *sbi, bool sync, bool mount)
 
 		if (nm_i->nid_cnt[FREE_NID_LIST])
 			return;
-
-		/* try to find free nids with nat_bits */
-		if (!scan_nat_bits(sbi) && nm_i->nid_cnt[FREE_NID_LIST])
-			return;
-	}
-
-	/* find next valid candidate */
-	if (enabled_nat_bits(sbi, NULL)) {
-		int idx = find_next_zero_bit_le(nm_i->full_nat_bits,
-					nm_i->nat_blocks, 0);
-
-		if (idx >= nm_i->nat_blocks)
-			set_sbi_flag(sbi, SBI_NEED_FSCK);
-		else
-			nid = idx * NAT_ENTRY_PER_BLOCK;
 	}
 
 	/* readahead nat pages to be scanned */
@@ -2616,8 +2534,6 @@ static int __get_nat_bitmaps(struct f2fs_sb_info *sbi)
 	return 0;
 }
 
-<<<<<<< HEAD
-=======
 inline void load_free_nid_bitmap(struct f2fs_sb_info *sbi)
 {
 	struct f2fs_nm_info *nm_i = NM_I(sbi);
@@ -2652,7 +2568,6 @@ inline void load_free_nid_bitmap(struct f2fs_sb_info *sbi)
 	}
 }
 
->>>>>>> b6375e5... f2fs: cover update_free_nid_bitmap with nid_list_lock
 static int init_node_manager(struct f2fs_sb_info *sbi)
 {
 	struct f2fs_super_block *sb_raw = F2FS_RAW_SUPER(sbi);
@@ -2750,6 +2665,9 @@ int build_node_manager(struct f2fs_sb_info *sbi)
 	err = init_free_nid_cache(sbi);
 	if (err)
 		return err;
+
+	/* load free nid status from nat_bits table */
+	load_free_nid_bitmap(sbi);
 
 	build_free_nids(sbi, true, true);
 	return 0;
