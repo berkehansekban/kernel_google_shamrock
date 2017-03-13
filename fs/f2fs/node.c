@@ -1852,12 +1852,18 @@ static void update_free_nid_bitmap(struct f2fs_sb_info *sbi, nid_t nid,
 	else
 		__clear_bit_le(nid_ofs, nm_i->free_nid_bitmap[nat_ofs]);
 
+<<<<<<< HEAD
 	spin_lock(&nm_i->free_nid_lock);
+=======
+>>>>>>> b6375e5... f2fs: cover update_free_nid_bitmap with nid_list_lock
 	if (set)
 		nm_i->free_nid_count[nat_ofs]++;
 	else if (!build)
 		nm_i->free_nid_count[nat_ofs]--;
+<<<<<<< HEAD
 	spin_unlock(&nm_i->free_nid_lock);
+=======
+>>>>>>> b6375e5... f2fs: cover update_free_nid_bitmap with nid_list_lock
 }
 
 static void scan_nat_page(struct f2fs_sb_info *sbi,
@@ -1886,7 +1892,13 @@ static void scan_nat_page(struct f2fs_sb_info *sbi,
 		f2fs_bug_on(sbi, blk_addr == NEW_ADDR);
 		if (blk_addr == NULL_ADDR)
 			freed = add_free_nid(sbi, start_nid, true);
+<<<<<<< HEAD
 		update_free_nid_bitmap(sbi, start_nid, freed, true);
+=======
+		spin_lock(&NM_I(sbi)->nid_list_lock);
+		update_free_nid_bitmap(sbi, start_nid, freed, true);
+		spin_unlock(&NM_I(sbi)->nid_list_lock);
+>>>>>>> b6375e5... f2fs: cover update_free_nid_bitmap with nid_list_lock
 	}
 }
 
@@ -2604,6 +2616,43 @@ static int __get_nat_bitmaps(struct f2fs_sb_info *sbi)
 	return 0;
 }
 
+<<<<<<< HEAD
+=======
+inline void load_free_nid_bitmap(struct f2fs_sb_info *sbi)
+{
+	struct f2fs_nm_info *nm_i = NM_I(sbi);
+	unsigned int i = 0;
+	nid_t nid, last_nid;
+
+	if (!enabled_nat_bits(sbi, NULL))
+		return;
+
+	for (i = 0; i < nm_i->nat_blocks; i++) {
+		i = find_next_bit_le(nm_i->empty_nat_bits, nm_i->nat_blocks, i);
+		if (i >= nm_i->nat_blocks)
+			break;
+
+		__set_bit_le(i, nm_i->nat_block_bitmap);
+
+		nid = i * NAT_ENTRY_PER_BLOCK;
+		last_nid = (i + 1) * NAT_ENTRY_PER_BLOCK;
+
+		spin_lock(&NM_I(sbi)->nid_list_lock);
+		for (; nid < last_nid; nid++)
+			update_free_nid_bitmap(sbi, nid, true, true);
+		spin_unlock(&NM_I(sbi)->nid_list_lock);
+	}
+
+	for (i = 0; i < nm_i->nat_blocks; i++) {
+		i = find_next_bit_le(nm_i->full_nat_bits, nm_i->nat_blocks, i);
+		if (i >= nm_i->nat_blocks)
+			break;
+
+		__set_bit_le(i, nm_i->nat_block_bitmap);
+	}
+}
+
+>>>>>>> b6375e5... f2fs: cover update_free_nid_bitmap with nid_list_lock
 static int init_node_manager(struct f2fs_sb_info *sbi)
 {
 	struct f2fs_super_block *sb_raw = F2FS_RAW_SUPER(sbi);
@@ -2683,9 +2732,6 @@ static int init_free_nid_cache(struct f2fs_sb_info *sbi)
 					sizeof(unsigned short), GFP_KERNEL);
 	if (!nm_i->free_nid_count)
 		return -ENOMEM;
-
-	spin_lock_init(&nm_i->free_nid_lock);
-
 	return 0;
 }
 
